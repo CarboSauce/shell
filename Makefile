@@ -2,6 +2,7 @@ BDIR ?= build
 CC ?= gcc
 LDFLAGS ?=
 CFLAGS ?= 
+
 ifeq ($(RELEASE),)
 	CFLAGS += -g -fsanitize=address
 	LDFLAGS += -lasan
