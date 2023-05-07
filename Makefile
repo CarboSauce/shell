@@ -32,3 +32,6 @@ $(OBJS): | $(BDIR)
 
 $(BDIR):
 	mkdir -p $(BDIR)
+
+clean:
+	rm -f $(OBJS) $(BDIR)/shell.out
