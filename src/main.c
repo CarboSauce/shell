@@ -41,7 +41,7 @@ int prompt_init(char** prompt)
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf("Cmdlist(%d): \n", i);
+		printf("Cmdlist(%d); Attribute(%d) \n", i, in->cmdlist.commands[i].attrib);
 		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
 			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}

@@ -15,6 +15,7 @@ VEC_DECLARE(vec_cmds, shell_cmd);
 enum stop_reason {
 	END_OF_LINE,
 	WHITESPACE,
+	NO_MATCH,
 };
 
 enum symbol {
@@ -27,8 +28,8 @@ enum symbol {
 };
 
 typedef struct redirect {
-	enum symbol symbol;
-	int openflags;
+	enum stop_reason reason;
+	enum cmd_attributes attr;
 } redirect;
 
 static void critical_err(const char* str)
@@ -73,84 +74,71 @@ static int push_word(string* str, const char** line)
 
 
 
-static redirect parse_symbol(const char** in)
+static cmd_attributes parse_symbol(const char** in)
 {
 	const char* tmp = *in;
-	enum symbol symbol;
-	int flags = 0;
+	enum stop_reason symbol;
+	enum cmd_attributes flags = ATTRIBUTE_NONE; 
 	int moveahead = 0;
 	switch (*tmp) {
 	case '1': 
 		if (*tmp == '>') {
-			flags = O_CREAT;
-			symbol = SYMBOL_STDOUT;
+			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
 			moveahead++;
 			
 			if (tmp[2] == '>') {
 				moveahead++;
-				flags |= O_APPEND;
+				flags |= ATTRIBUTE_APPEND;
 			} else if (tmp[2] == '|') {
 				moveahead++;
-				flags |= O_TRUNC;
+				flags |= ATTRIBUTE_TRUNC;
 			}
-		} else if (tmp[1] == '\0') {
-			symbol = SYMBOL_EOL;
 		} else {
-			symbol = SYMBOL_NOMATCH;
+			flags = ATTRIBUTE_NONE;
 		}
 		break;
 	case '2':
 		if (tmp[1] == '>') {
-			flags = O_CREAT;
-			symbol = SYMBOL_STDOUT;
+			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
 			moveahead+=2;
 			
 			if (tmp[2] == '>') {
 				moveahead++;
-				flags |= O_APPEND;
+				flags |= ATTRIBUTE_APPEND;
 			} else if (tmp[2] == '|') {
 				moveahead++;
-				flags |= O_TRUNC;
+				flags |= ATTRIBUTE_TRUNC;
 			};
-		} else if (tmp[1] == '\0') {
-			symbol = SYMBOL_EOL;
 		} else {
-			symbol = SYMBOL_NOMATCH;
-		}
+			flags = ATTRIBUTE_NONE;
+		} 
 		break;
 	case '>': {
-		flags = O_CREAT;
-		symbol = SYMBOL_STDOUT;
+		flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
 		moveahead++;
 		if (tmp[1] == '>') {
 			moveahead++;
-			flags |= O_APPEND;
+			flags |= ATTRIBUTE_APPEND;
 		} else if (tmp[1] == '|') {
 			moveahead++;
-			flags |= O_TRUNC;
+			flags |= ATTRIBUTE_TRUNC;
 		};
 		break;
 	}
 	case '|':
-		symbol = SYMBOL_PIPE;
+		flags |= ATTRIBUTE_PIPE;
 		moveahead++;
 		break;
 	case '<':
-		symbol = SYMBOL_STDIN;
+		flags |= ATTRIBUTE_STDIN;
 		moveahead++;
 		break;
-	case '\0':
-		symbol = SYMBOL_EOL;
-		break;
 	default:
-		symbol = SYMBOL_NOMATCH;
+		flags |= ATTRIBUTE_NONE;
 		break;
 	}
 	*in = skip_ws(tmp+moveahead);
-	return (redirect) {
-		.symbol = symbol,
-		.openflags = flags
-	};
+	return flags; 
 }
 
 int parse_line(parser_result* res, const char* line)
@@ -159,15 +147,12 @@ int parse_line(parser_result* res, const char* line)
 	vec_cmds cmds = vec_cmds_init();
 	for (;;) {
 		line = skip_ws(line);
-		redirect redi = parse_symbol(&line);
-		if (redi.symbol != SYMBOL_NOMATCH
-		 && redi.symbol != SYMBOL_EOL) {
+		cmd_attributes redi = parse_symbol(&line);
+		if (redi != ATTRIBUTE_NONE) {
 		 	char* argv_needs_null = NULL;
 		 	vec_string_push(&out,&argv_needs_null);
 		 	shell_cmd tmp = (shell_cmd) {
-		 		.stdinid = 0,
-		 		.stderrid = 0,
-		 		.stdoutid = 0,
+		 		.attrib = redi,
 		 		.argc = out.size,
 		 		.argv = out.buf
 		 	};
@@ -200,9 +185,7 @@ int parse_line(parser_result* res, const char* line)
 	char* argv_needs_null = NULL;
 	vec_string_push(&out,&argv_needs_null);
 	shell_cmd tmp = (shell_cmd) {
-		.stdinid = 0,
-		.stderrid = 0,
-		.stdoutid = 0,
+		.attrib = ATTRIBUTE_NONE,
 		.argc = out.size,
 		.argv = out.buf
 	};
