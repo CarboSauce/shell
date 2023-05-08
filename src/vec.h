@@ -19,7 +19,7 @@
 			exit(1);                                             \
 		}                                                        \
 		out.size = 0;                                            \
-		out.cap = 8 * sizeof(type);                              \
+		out.cap = 8;                                             \
 		return out;                                              \
 	}                                                            \
                                                                  \
@@ -32,9 +32,9 @@
                                                                  \
 	static void name##_push(name* vec, type* data)               \
 	{                                                            \
-		if (vec->size + sizeof(type) == vec->cap) {              \
+		if (vec->size + 1 == vec->cap) {                         \
 			const size_t newcap = vec->cap + vec->cap / 2;       \
-			vec->buf = realloc(vec->buf, newcap);                \
+			vec->buf = realloc(vec->buf, newcap * sizeof(type)); \
 		}                                                        \
 		memcpy(&vec->buf[vec->size], data, sizeof(type));        \
 		vec->size++;                                             \

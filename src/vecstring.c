@@ -24,7 +24,7 @@ void string_deinit(string* str)
 
 void string_push(string* str, char c)
 {
-	if (str->size + 1 == str->cap) {
+	if (str->size + 2 == str->cap) {
 		const size_t newcap = str->cap + str->cap / 2;
 		str->buf = realloc(str->buf, newcap);
 	}

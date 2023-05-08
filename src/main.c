@@ -42,8 +42,8 @@ void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
 		printf("Cmdlist(%d): \n", i);
-		for (int j = 0; j != in->cmdlist.commands->argc; ++j) {
-			printf("\targ(%d): %s\n", j, in->cmdlist.commands->argv[j]);
+		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
+			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}
 	}
 }
@@ -131,7 +131,11 @@ int main(int argc, char** argv)
 		if (buf == NULL)
 			continue;
 		parser_result pars;
-		parse_line(&pars, buf);
+		int res = parse_line(&pars, buf);
+		if (res) {
+			puts("NO COMMAND");
+			goto rl_cleanup;
+		}
 		enum builtin tmp = detect_builtin(pars.cmdlist.commands);
 		if (tmp == BUILTIN_EXIT)
 			running = false;
@@ -141,9 +145,9 @@ int main(int argc, char** argv)
 			handle_builtin(pars.cmdlist.commands, tmp);
 
 		print_cmdline(&pars);
-
 		parser_result_dealloc(&pars);
 		add_history(buf);
+rl_cleanup:
 		free(buf);
 	}
 	// dealloc resources
