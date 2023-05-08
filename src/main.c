@@ -44,7 +44,11 @@ int prompt_init(char** prompt)
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf("Cmdlist(%d); Attribute(%d) \n", i, in->cmdlist.commands[i].attrib);
+		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) isasync(%d)\n"
+				, i
+				, in->cmdlist.commands[i].attrib
+				, in->stdinfile
+				, in->is_async);
 		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
 			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}
@@ -247,6 +251,7 @@ int main(int argc, char** argv)
 		char* buf = readline("$ ");
 		if (buf == NULL) {
 			printf("readline returned null\n");
+			exit(1); // temporary
 			continue;
 		}
 		parser_result pars;

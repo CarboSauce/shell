@@ -25,8 +25,8 @@ typedef struct cmd_list {
 
 typedef struct parser_result {
 	cmd_list cmdlist;
-	const char* stdinfile;
-	int is_async : 1;
+	char* stdinfile;
+	int is_async;
 } parser_result;
 
 int parse_line(parser_result* res, const char* line);
