@@ -5,11 +5,13 @@
 #include <pwd.h>
 #include <readline/history.h>
 #include <readline/readline.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdatomic.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 
@@ -149,8 +151,11 @@ bool pajpik(parser_result* in)
 
 
 
+
+
 char curdir[PATH_MAX];
 const char* progname;
+char* prompt;
 
 void logerr()
 {
@@ -179,7 +184,7 @@ int prompt_init(char** prompt)
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf("Cmdlist(%d): \n", i);
+		printf("Cmdlist(%d); Attribute(%d) \n", i, in->cmdlist.commands[i].attrib);
 		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
 			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}
@@ -192,6 +197,7 @@ enum builtin {
 	BUILTIN_HISTORY,
 	BUILTIN_ECHO,
 	BUILTIN_EXPORT,
+	BUILTIN_UNEXPORT,
 	BUILTIN_NONE,
 };
 
@@ -214,8 +220,21 @@ enum builtin detect_builtin(shell_cmd* in)
 		return BUILTIN_ECHO;
 	if (strcmp(in->argv[0], "export") == 0)
 		return BUILTIN_EXPORT;
+	if (strcmp(in->argv[0], "unexport") == 0)
+		return BUILTIN_UNEXPORT;
 
 	return BUILTIN_NONE;
+}
+
+void print_history()
+{
+	HIST_ENTRY** his = history_list();
+	if (his == NULL)
+		return;
+	HIST_ENTRY* entry;
+	for (int i = 0; (entry = *his++) != NULL; i++) {
+		printf("%d\t%s\n", i, entry->line);
+	}
 }
 
 void handle_builtin(const shell_cmd* cmd, enum builtin in)
@@ -239,13 +258,107 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 		}
 		putchar('\n');
 		break;
-	case BUILTIN_EXPORT:
 	case BUILTIN_HISTORY:
-		printf("Unimplemented builtin: %s", cmd->argv[0]);
+		print_history();
+		break;
+	case BUILTIN_EXPORT: {
+		if (cmd->argc < 3) {
+			printf("export: Expected at least 2 arguments\n");
+			break;
+		}
+		int overwrite = 0;
+		const char *in, *out;
+		if (strcmp(cmd->argv[1], "-o") == 0) {
+			if (cmd->argc != 4) {
+				printf("export: Expected 2 arguments");
+				break;
+			}
+			overwrite = 1;
+			in = cmd->argv[2];
+			out = cmd->argv[3];
+		} else {
+			in = cmd->argv[1];
+			out = cmd->argv[2];
+		}
+		if (setenv(in, out, overwrite) == -1) {
+			perror("export");
+		}
+	} break;
+	case BUILTIN_UNEXPORT:
+		if (cmd->argc != 2) {
+			printf("unexport: Expected 1 argument");
+			break;
+		}
+		if (unsetenv(cmd->argv[1]) == -1) {
+			perror("unexport");
+		}
+		break;
 	case BUILTIN_EXIT:
 	case BUILTIN_NONE:
 		break;
 	}
+}
+
+
+atomic_int sigint_var,sigquit_var,sigchld_var;
+
+void sig_handler(int id) {
+	switch(id) {
+		case SIGQUIT:
+			sigquit_var = 1;
+		break;
+		case SIGINT:
+			sigint_var = 1;
+		break;
+		case SIGCHLD:
+			sigchld_var++;
+		break;
+	}
+}
+
+void sigint_handler(int id) {
+	rl_free_line_state();
+	rl_cleanup_after_signal();
+	RL_UNSETSTATE(RL_STATE_ISEARCH
+		| RL_STATE_ISEARCH
+		| RL_STATE_NSEARCH
+		| RL_STATE_VIMOTION
+		| RL_STATE_NUMERICARG
+		| RL_STATE_MULTIKEY);
+	rl_point = rl_end = rl_mark = 0;
+	rl_line_buffer[0] = 0;
+	write(STDOUT_FILENO,"\n",1);
+}
+
+int signal_hook() {
+	int reset = 0;
+	if (sigint_var) {
+		sigint_var = 0;
+		reset = 1;
+	}
+	if (sigquit_var) {
+		sigquit_var = 0;
+		reset = 1;
+		putchar('\n');
+		print_history();
+	}
+	if (reset) {
+	rl_cleanup_after_signal();
+	putchar('\n');
+	rl_on_new_line();
+	rl_replace_line("",0);
+	rl_redisplay();
+	//rl_on_new_line();
+	//RL_UNSETSTATE(RL_STATE_ISEARCH
+	//	| RL_STATE_ISEARCH
+	//	| RL_STATE_NSEARCH
+	//	| RL_STATE_VIMOTION
+	//	| RL_STATE_NUMERICARG
+	//	| RL_STATE_MULTIKEY);
+	//rl_point = rl_end = rl_mark = 0;
+	//rl_line_buffer[0] = 0;
+	}
+	return 0;
 }
 
 int main(int argc, char** argv)
@@ -255,19 +368,27 @@ int main(int argc, char** argv)
 
 	set_cwd();
 
-	char* prompt;
 	if (prompt_init(&prompt) < 0) {
 		perror(argv[0]);
 		return 1;
 	}
+	//rl_clear_signals();
+	signal(SIGINT,sig_handler);
+	signal(SIGQUIT,sig_handler);
+	signal(SIGCHLD,sig_handler);
+	rl_signal_event_hook = signal_hook;
 
 	read_history(NULL);
+	
+
 	bool running = true;
 	while (running) {
 		printf(prompt, curdir);
 		char* buf = readline("$ ");
-		if (buf == NULL)
+		if (buf == NULL) {
+			printf("readline returned null\n");
 			continue;
+		}
 		parser_result pars;
 		int res = parse_line(&pars, buf);
 		if (res) {
@@ -286,7 +407,7 @@ int main(int argc, char** argv)
 		pajpik(&pars);
 		parser_result_dealloc(&pars);
 		add_history(buf);
-rl_cleanup:
+	rl_cleanup:
 		free(buf);
 	}
 	// dealloc resources
