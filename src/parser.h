@@ -1,10 +1,18 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+typedef enum {
+	ATTRIBUTE_NONE = 0,
+	ATTRIBUTE_APPEND = 1,
+	ATTRIBUTE_TRUNC = 2,
+	ATTRIBUTE_CREAT = 4,
+	ATTRIBUTE_PIPE = 8,
+	ATTRIBUTE_STDOUT = 16,
+	ATTRIBUTE_STDERR = 32,
+} cmd_attributes;
+
 typedef struct shell_cmd {
-	int stdinid;
-	int stdoutid;
-	int stderrid;
+	cmd_attributes attrib;
 	int argc;
 	char** argv;
 } shell_cmd;

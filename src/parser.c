@@ -15,7 +15,6 @@ VEC_DECLARE(vec_cmds, shell_cmd);
 enum stop_reason {
 	END_OF_LINE,
 	WHITESPACE,
-	EOL_FRONT
 };
 
 enum symbol {
@@ -46,15 +45,22 @@ static const char* skip_ws(const char* in)
 static int push_word(string* str, const char** line)
 {
 	int state_dq = 0;
+	int state_bcksl = 0;
 	const char* tmp = *line;
 	if (*tmp == '\0')
-		return EOL_FRONT;
+		return END_OF_LINE;
 	for (char c; (c = *tmp++) != '\0';) {
-		if (c == '"') {
+		if (c == '\\' && state_bcksl != 1) {
+			state_bcksl = 1;
+			continue;
+		} else if (c == '"' && state_bcksl != 1) {
 			state_dq = !state_dq;
 			continue;
 		}
-		if (state_dq == 0 && isspace(c)) {
+		if (state_bcksl == 1) {
+			string_push(str, c);
+			state_bcksl = 0;
+		} else if (state_dq == 0 && isspace(c)) {
 			*line = tmp;
 			return WHITESPACE;
 		} else {
@@ -156,6 +162,8 @@ int parse_line(parser_result* res, const char* line)
 		redirect redi = parse_symbol(&line);
 		if (redi.symbol != SYMBOL_NOMATCH
 		 && redi.symbol != SYMBOL_EOL) {
+		 	char* argv_needs_null = NULL;
+		 	vec_string_push(&out,&argv_needs_null);
 		 	shell_cmd tmp = (shell_cmd) {
 		 		.stdinid = 0,
 		 		.stderrid = 0,
@@ -170,13 +178,17 @@ int parse_line(parser_result* res, const char* line)
 		string str = string_init();
 		int res = push_word(&str, &line);
 
-		if (res == EOL_FRONT && out.size == 0) {
+		if (res == END_OF_LINE 
+		 && out.size == 0
+		 && cmds.size == 0
+		 && str.size == 0) {
 			vec_cmds_deinit(&cmds);
 			vec_string_deinit(&out);
 			string_deinit(&str);
 			return 1;
 		}
-		vec_string_push(&out, &str.buf);
+		if (str.size != 0)
+			vec_string_push(&out, &str.buf);
 
 		if (res == WHITESPACE) {
 			continue;
@@ -185,6 +197,8 @@ int parse_line(parser_result* res, const char* line)
 		}
 	}
 
+	char* argv_needs_null = NULL;
+	vec_string_push(&out,&argv_needs_null);
 	shell_cmd tmp = (shell_cmd) {
 		.stdinid = 0,
 		.stderrid = 0,
