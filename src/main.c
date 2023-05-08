@@ -12,6 +12,145 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdatomic.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+
+
+
+
+
+
+
+
+
+
+typedef struct process_ctx {
+	int stdin_fd;
+	int stdout_fd;
+	int status;
+} process_ctx;
+
+
+typedef struct process_list {
+	int pipes_len;
+	int (*pipes)[2];
+	process_ctx* processes;
+} process_list;
+
+
+//to do przerobienia bo chuj
+void p_close(process_list* p_list){
+	for (int i = 0; i < p_list->pipes_len; i++) {
+		close(p_list->pipes[i][0]);
+		close(p_list->pipes[i][1]);
+	}
+}
+
+
+
+void execute(cmd_list* command_list, process_list* p_list, int current)
+{
+	if(current == 0)
+	{
+	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
+	}
+
+	//if (cmdlist->commands.attrib & ATTRIBUTE_PIPE != 0)
+	//{
+//	
+//	}
+	else if(current == p_list->pipes_len)
+	{
+	dup2(p_list->processes[current].stdin_fd, STDIN_FILENO);
+	}
+	else{
+	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
+	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
+	}
+	p_close(p_list);
+	execvp(command_list->commands->argv[0],command_list->commands->argv);
+	//saluting emoji, oby dzialalo bo mnie popierdoli do reszty
+
+}
+
+pid_t run(cmd_list* commandlist, process_list p_list, int current)
+{
+	pid_t child_pid = fork();
+	if(child_pid<0) 
+	{
+	return -1;
+	}
+	else if(child_pid){
+	return child_pid;
+	} else{
+	execute(commandlist, &p_list, current);
+	return 0;
+	}
+}
+
+bool pajpik(parser_result* in)
+{
+	process_list p_list;
+	p_list.pipes_len=in->cmdlist.size-1;
+	p_list.pipes = calloc(sizeof(int[2]), p_list.pipes_len);
+
+	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
+//z tymi ++i moze sie yebac, trzeba bd sprawdzic jak bd siadalo cos
+	for(int i=1; i<p_list.pipes_len;++i)
+	{
+		pipe(p_list.pipes[i-1]);
+		p_list.processes[i].stdin_fd = p_list.pipes[i-1][0];
+		p_list.processes[i-1].stdout_fd = p_list.pipes[i-1][1];
+
+	}
+	
+	for (int i =0; i<p_list.pipes_len+1;++i)
+	{
+		run(&in->cmdlist, p_list, i);
+	}
+	//tu jeszcze jest ten close i for duzo wait null
+	p_close(&p_list);
+
+	for(int i=0; i< p_list.pipes_len+1;++i){
+		wait(NULL);
+	}
+	return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 char curdir[PATH_MAX];
 const char* progname;
@@ -269,6 +408,7 @@ int main(int argc, char** argv)
 			handle_builtin(pars.cmdlist.commands, tmp);
 
 		print_cmdline(&pars);
+		pajpik(&pars);
 		parser_result_dealloc(&pars);
 		add_history(buf);
 	rl_cleanup:
