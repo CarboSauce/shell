@@ -12,6 +12,8 @@ VEC_DECLARE(vec_string, char*);
 
 VEC_DECLARE(vec_cmds, shell_cmd);
 
+extern const char* progname;
+
 enum stop_reason {
 	END_OF_LINE,
 	WHITESPACE,
@@ -141,10 +143,17 @@ static cmd_attributes parse_symbol(const char** in)
 	return flags; 
 }
 
+void cleanup_vecs(vec_cmds* in1, vec_string* in2, string* in3) {
+	vec_cmds_deinit(in1);
+	vec_string_deinit(in2);
+	string_deinit(in3);
+}
+
 int parse_line(parser_result* res, const char* line)
 {
 	vec_string out = vec_string_init();
 	vec_cmds cmds = vec_cmds_init();
+	const char* stdinf;
 	for (;;) {
 		line = skip_ws(line);
 		cmd_attributes redi = parse_symbol(&line);
@@ -167,10 +176,16 @@ int parse_line(parser_result* res, const char* line)
 		 && out.size == 0
 		 && cmds.size == 0
 		 && str.size == 0) {
-			vec_cmds_deinit(&cmds);
-			vec_string_deinit(&out);
-			string_deinit(&str);
+			cleanup_vecs(&cmds, &out, &str);
 			return 1;
+		}
+
+		if (redi == ATTRIBUTE_STDIN) {
+			if (str.size == 0) {
+				fprintf(stderr,"%s: Missing file to redirect stdin\n",progname);
+				return 1;
+			}
+			stdinf = str.buf;
 		}
 		if (str.size != 0)
 			vec_string_push(&out, &str.buf);
@@ -178,6 +193,8 @@ int parse_line(parser_result* res, const char* line)
 		if (res == WHITESPACE) {
 			continue;
 		} else if (res == END_OF_LINE) {
+			if (str.size == 0)
+				string_deinit(&str);
 			break;
 		}
 	}
