@@ -68,7 +68,7 @@ void execute(cmd_list* command_list, process_list* p_list, int current)
 	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
 	}
 	p_close(p_list);
-	return execvp(command_list->commands->argv[0],command_list->commands->argv);
+	execvp(command_list->commands->argv[0],command_list->commands->argv);
 	//saluting emoji, oby dzialalo bo mnie popierdoli do reszty
 
 }
@@ -77,8 +77,9 @@ pid_t run(cmd_list* commandlist, process_list p_list, int current)
 {
 	pid_t child_pid = fork();
 	if(child_pid<0) 
-	//tutaj chuj
-	{}
+	{
+	return -1;
+	}
 	else if(child_pid){
 	return child_pid;
 	} else{
@@ -105,7 +106,7 @@ bool pajpik(parser_result* in)
 	
 	for (int i =0; i<p_list.pipes_len+1;++i)
 	{
-		run(&in->cmdlist.commands[i], p_list, i);
+		run(&in->cmdlist, p_list, i);
 	}
 	//tu jeszcze jest ten close i for duzo wait null
 	p_close(&p_list);
@@ -115,8 +116,6 @@ bool pajpik(parser_result* in)
 	}
 	return 0;
 }
-
-
 
 
 
@@ -387,7 +386,7 @@ int main(int argc, char** argv)
 		char* buf = readline("$ ");
 		if (buf == NULL) {
 			printf("readline returned null\n");
-			continue;
+			exit(1);
 		}
 		parser_result pars;
 		int res = parse_line(&pars, buf);
