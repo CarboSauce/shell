@@ -4,7 +4,7 @@ LDFLAGS ?=
 CFLAGS ?= 
 
 ifeq ($(RELEASE),)
-	CFLAGS += -g -fsanitize=address
+	CFLAGS += -ggdb3 -fsanitize=address
 	LDFLAGS += -lasan
 	BDIR := $(BDIR)/debug
 else
@@ -14,7 +14,7 @@ endif
 
 # W celu dodania nowego pliku do kompilacji,
 # trzeba dodac nazwe pliku objektowego do listy
-OBJS := $(addprefix $(BDIR)/,main.o parser.o)
+OBJS := $(addprefix $(BDIR)/,main.o parser.o vecstring.o)
 DEPS := $(OBJS:.o=.d)
 
 .PHONY: clean run build
