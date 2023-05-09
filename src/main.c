@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 char curdir[PATH_MAX];
 const char* progname;
@@ -37,7 +38,7 @@ typedef struct process_list {
 	process_ctx* processes;
 } process_list;
 
-// to do przerobienia bo chuj
+
 void p_close(process_list* p_list)
 {
 	for (int i = 0; i < p_list->pipes_len; i++) {
@@ -50,12 +51,8 @@ void p_close(process_list* p_list)
 
 void execute(cmd_list* command_list, process_list* p_list, int current)
 {
-	if (current != p_list->pipes_len) {
 		dup2(p_list->processes[current].stdout_fd, STDOUT_FILENO);
-	}
-	if (current != 0) {
 		dup2(p_list->processes[current].stdin_fd, STDIN_FILENO);
-	}
 	p_close(p_list);
 	if (execvp(command_list->commands[current].argv[0],
 			command_list->commands[current].argv)
@@ -88,7 +85,48 @@ bool pajpik(parser_result* in)
 	p_list.pipes_len = in->cmdlist.size - 1;
 	p_list.pipes     = calloc(sizeof(int[2]), p_list.pipes_len);
 	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
+	
+	if(in->stdoutfile != NULL)
+	{
+		int perms = O_WRONLY;
+		if((in->attrib & ATTRIBUTE_APPEND) != 0)
+			perms |= O_APPEND;
+		if((in->attrib & ATTRIBUTE_CREAT) != 0)
+			perms |= O_CREAT;
+		
+		if((in->attrib & ATTRIBUTE_TRUNC) != 0)
+			perms |= O_TRUNC;
+		
+		
+		int fd = open(in->stdoutfile, perms , 0666);
+		if(fd == -1){
+		perror(in->stdinfile);
+		free(p_list.pipes);
+		free(p_list.processes);
+		return 1;
+		}
+		p_list.processes[in->cmdlist.size - 1].stdout_fd= fd;
+	}
+	else
+	{
+		p_list.processes[in->cmdlist.size - 1].stdout_fd=STDOUT_FILENO;
+	}
 
+	if(in->stdinfile != NULL)
+	{
+		int fd = open(in->stdinfile, O_RDONLY, 0666);
+		if(fd == -1){
+			perror(in->stdinfile);
+			free(p_list.pipes);
+			free(p_list.processes);
+			return 1;
+			}
+		p_list.processes[0].stdin_fd= fd;
+	}
+	else
+	{
+		p_list.processes[0].stdin_fd=STDIN_FILENO;
+	}
 	for (int i = 1; i < in->cmdlist.size; ++i) {
 		pipe(p_list.pipes[i - 1]);
 		p_list.processes[i].stdin_fd      = p_list.pipes[i - 1][0];
