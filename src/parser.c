@@ -101,22 +101,6 @@ static cmd_attributes parse_symbol(const char** in)
 			flags = ATTRIBUTE_NONE;
 		}
 		break;
-//	case '2':
-//		if (tmp[1] == '>') {
-//			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
-//			moveahead += 2;
-//
-//			if (tmp[2] == '>') {
-//				moveahead++;
-//				flags |= ATTRIBUTE_APPEND;
-//			} else if (tmp[2] == '|') {
-//				moveahead++;
-//				flags |= ATTRIBUTE_TRUNC;
-//			};
-//		} else {
-//			flags = ATTRIBUTE_NONE;
-//		}
-//		break;
 	case '>': {
 		flags |= ATTRIBUTE_STDOUT;
 		moveahead++;
