@@ -6,151 +6,14 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <stdatomic.h>
-#include <sys/wait.h>
 #include <sys/types.h>
-
-
-
-
-
-
-
-
-
-
-typedef struct process_ctx {
-	int stdin_fd;
-	int stdout_fd;
-	int status;
-} process_ctx;
-
-
-typedef struct process_list {
-	int pipes_len;
-	int (*pipes)[2];
-	process_ctx* processes;
-} process_list;
-
-
-//to do przerobienia bo chuj
-void p_close(process_list* p_list){
-	for (int i = 0; i < p_list->pipes_len; i++) {
-		close(p_list->pipes[i][0]);
-		close(p_list->pipes[i][1]);
-	}
-}
-
-
-
-void execute(cmd_list* command_list, process_list* p_list, int current)
-{
-	if(current == 0)
-	{
-	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
-	}
-
-	//if (cmdlist->commands.attrib & ATTRIBUTE_PIPE != 0)
-	//{
-//	
-//	}
-	else if(current == p_list->pipes_len)
-	{
-	dup2(p_list->processes[current].stdin_fd, STDIN_FILENO);
-	}
-	else{
-	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
-	dup2(p_list->processes[current].stdout_fd,STDOUT_FILENO);
-	}
-	p_close(p_list);
-	execvp(command_list->commands->argv[0],command_list->commands->argv);
-	//saluting emoji, oby dzialalo bo mnie popierdoli do reszty
-
-}
-
-pid_t run(cmd_list* commandlist, process_list p_list, int current)
-{
-	pid_t child_pid = fork();
-	if(child_pid<0) 
-	{
-	return -1;
-	}
-	else if(child_pid){
-	return child_pid;
-	} else{
-	execute(commandlist, &p_list, current);
-	return 0;
-	}
-}
-
-bool pajpik(parser_result* in)
-{
-	process_list p_list;
-	p_list.pipes_len=in->cmdlist.size-1;
-	p_list.pipes = calloc(sizeof(int[2]), p_list.pipes_len);
-
-	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
-//z tymi ++i moze sie yebac, trzeba bd sprawdzic jak bd siadalo cos
-	for(int i=1; i<p_list.pipes_len;++i)
-	{
-		pipe(p_list.pipes[i-1]);
-		p_list.processes[i].stdin_fd = p_list.pipes[i-1][0];
-		p_list.processes[i-1].stdout_fd = p_list.pipes[i-1][1];
-
-	}
-	
-	for (int i =0; i<p_list.pipes_len+1;++i)
-	{
-		run(&in->cmdlist, p_list, i);
-	}
-	//tu jeszcze jest ten close i for duzo wait null
-	p_close(&p_list);
-
-	for(int i=0; i< p_list.pipes_len+1;++i){
-		wait(NULL);
-	}
-	return 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#include <sys/wait.h>
+#include <unistd.h>
 
 char curdir[PATH_MAX];
 const char* progname;
@@ -160,6 +23,85 @@ void logerr()
 {
 	perror(progname);
 	exit(1);
+}
+
+typedef struct process_ctx {
+	int stdin_fd;
+	int stdout_fd;
+	int status;
+} process_ctx;
+
+typedef struct process_list {
+	int pipes_len;
+	int (*pipes)[2];
+	process_ctx* processes;
+} process_list;
+
+// to do przerobienia bo chuj
+void p_close(process_list* p_list)
+{
+	for (int i = 0; i < p_list->pipes_len; i++) {
+		close(p_list->pipes[i][0]);
+		close(p_list->pipes[i][1]);
+	}
+}
+
+void execute(cmd_list* command_list, process_list* p_list, int current)
+{
+	if (current != p_list->pipes_len) {
+		dup2(p_list->processes[current].stdout_fd, STDOUT_FILENO);
+	}
+	if (current != 0) {
+		dup2(p_list->processes[current].stdin_fd, STDIN_FILENO);
+	}
+	p_close(p_list);
+	if (execvp(command_list->commands[current].argv[0], command_list->commands[current].argv)
+		== -1) {
+		fprintf(stderr, "%s: %s: execvp failed: %s"
+				, progname
+				, command_list->commands[current].argv[0]
+				, strerror(errno));
+		exit(errno);
+	}
+}
+
+pid_t run(cmd_list* commandlist, process_list p_list, int current)
+{
+	pid_t child_pid = fork();
+	if (child_pid < 0) {
+		return -1;
+	} else if (child_pid) {
+		return child_pid;
+	} else {
+		execute(commandlist, &p_list, current);
+		return 0;
+	}
+}
+
+bool pajpik(parser_result* in)
+{
+	process_list p_list;
+	p_list.pipes_len = in->cmdlist.size - 1;
+	p_list.pipes = calloc(sizeof(int[2]), p_list.pipes_len);
+
+	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
+	for (int i = 1; i < in->cmdlist.size; ++i) {
+		pipe(p_list.pipes[i - 1]);
+		p_list.processes[i].stdin_fd = p_list.pipes[i - 1][0];
+		p_list.processes[i - 1].stdout_fd = p_list.pipes[i - 1][1];
+	}
+
+	for (int i = 0; i < in->cmdlist.size; ++i) {
+		run(&in->cmdlist, p_list, i);
+	}
+	p_close(&p_list);
+
+	for (int i = 0; i < p_list.pipes_len + 1; ++i) {
+		wait(NULL);
+	}
+	free(p_list.pipes);
+	free(p_list.processes);
+	return 0;
 }
 
 int prompt_init(char** prompt)
@@ -183,11 +125,7 @@ int prompt_init(char** prompt)
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) isasync(%d)\n"
-				, i
-				, in->cmdlist.commands[i].attrib
-				, in->stdinfile
-				, in->is_async);
+		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) isasync(%d)\n", i, in->cmdlist.commands[i].attrib, in->stdinfile, in->is_async);
 		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
 			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}
@@ -302,38 +240,35 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 	}
 }
 
+atomic_int sigint_var, sigquit_var, sigchld_var;
 
-atomic_int sigint_var,sigquit_var,sigchld_var;
-
-void sig_handler(int id) {
-	switch(id) {
-		case SIGQUIT:
-			sigquit_var = 1;
+void sig_handler(int id)
+{
+	switch (id) {
+	case SIGQUIT:
+		sigquit_var = 1;
 		break;
-		case SIGINT:
-			sigint_var = 1;
+	case SIGINT:
+		sigint_var = 1;
 		break;
-		case SIGCHLD:
-			sigchld_var++;
+	case SIGCHLD:
+		sigchld_var++;
 		break;
 	}
 }
 
-void sigint_handler(int id) {
+void sigint_handler(int id)
+{
 	rl_free_line_state();
 	rl_cleanup_after_signal();
-	RL_UNSETSTATE(RL_STATE_ISEARCH
-		| RL_STATE_ISEARCH
-		| RL_STATE_NSEARCH
-		| RL_STATE_VIMOTION
-		| RL_STATE_NUMERICARG
-		| RL_STATE_MULTIKEY);
+	RL_UNSETSTATE(RL_STATE_ISEARCH | RL_STATE_ISEARCH | RL_STATE_NSEARCH | RL_STATE_VIMOTION | RL_STATE_NUMERICARG | RL_STATE_MULTIKEY);
 	rl_point = rl_end = rl_mark = 0;
 	rl_line_buffer[0] = 0;
-	write(STDOUT_FILENO,"\n",1);
+	write(STDOUT_FILENO, "\n", 1);
 }
 
-int signal_hook() {
+int signal_hook()
+{
 	int reset = 0;
 	if (sigint_var) {
 		sigint_var = 0;
@@ -346,20 +281,11 @@ int signal_hook() {
 		print_history();
 	}
 	if (reset) {
-	rl_cleanup_after_signal();
-	putchar('\n');
-	rl_on_new_line();
-	rl_replace_line("",0);
-	rl_redisplay();
-	//rl_on_new_line();
-	//RL_UNSETSTATE(RL_STATE_ISEARCH
-	//	| RL_STATE_ISEARCH
-	//	| RL_STATE_NSEARCH
-	//	| RL_STATE_VIMOTION
-	//	| RL_STATE_NUMERICARG
-	//	| RL_STATE_MULTIKEY);
-	//rl_point = rl_end = rl_mark = 0;
-	//rl_line_buffer[0] = 0;
+		rl_cleanup_after_signal();
+		putchar('\n');
+		rl_on_new_line();
+		rl_replace_line("", 0);
+		rl_redisplay();
 	}
 	return 0;
 }
@@ -375,14 +301,13 @@ int main(int argc, char** argv)
 		perror(argv[0]);
 		return 1;
 	}
-	//rl_clear_signals();
-	signal(SIGINT,sig_handler);
-	signal(SIGQUIT,sig_handler);
-	signal(SIGCHLD,sig_handler);
+	// rl_clear_signals();
+	signal(SIGINT, sig_handler);
+	signal(SIGQUIT, sig_handler);
+	signal(SIGCHLD, sig_handler);
 	rl_signal_event_hook = signal_hook;
 
 	read_history(NULL);
-	
 
 	bool running = true;
 	while (running) {
@@ -403,12 +328,11 @@ int main(int argc, char** argv)
 		if (tmp == BUILTIN_EXIT)
 			running = false;
 		else if (tmp == BUILTIN_NONE)
-			printf("TODO: run command\n");
+			pajpik(&pars);
 		else
 			handle_builtin(pars.cmdlist.commands, tmp);
 
 		print_cmdline(&pars);
-		pajpik(&pars);
 		parser_result_dealloc(&pars);
 		add_history(buf);
 	rl_cleanup:
