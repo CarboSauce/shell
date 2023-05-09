@@ -42,8 +42,10 @@ typedef struct process_list {
 void p_close(process_list* p_list)
 {
 	for (int i = 0; i < p_list->pipes_len; i++) {
-		close(p_list->pipes[i][0]);
-		close(p_list->pipes[i][1]);
+		if (p_list->processes->stdout_fd != STDOUT_FILENO)
+			close(p_list->processes->stdout_fd);
+		if (p_list->processes->stdin_fd != STDIN_FILENO)
+			close(p_list->processes->stdin_fd);
 	}
 }
 
@@ -126,8 +128,16 @@ bool pajpik(parser_result* in)
 	}
 	p_close(&p_list);
 
-	for (int i = 0; i < p_list.pipes_len + 1; ++i) {
-		wait(NULL);
+	if (!in->is_async) {
+		sigset_t blockchld,oldmask;
+		sigemptyset(&blockchld);
+		sigaddset(&blockchld, SIGCHLD);
+		sigprocmask(SIG_BLOCK, &blockchld,&oldmask);
+
+		for (int i = 0; i < p_list.pipes_len + 1; ++i) {
+			wait(NULL);
+		}
+		sigprocmask(SIG_UNBLOCK, &blockchld,&oldmask);
 	}
 	free(p_list.pipes);
 	free(p_list.processes);
@@ -157,7 +167,7 @@ void print_cmdline(parser_result* in)
 	for (int i = 0; i != in->cmdlist.size; ++i) {
 		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) stdoutf(%s) isasync(%d)\n",
 			i,
-			in->cmdlist.commands[i].attrib,
+			in->attrib,
 			in->stdinfile,
 			in->stdoutfile,
 			in->is_async);
@@ -171,7 +181,7 @@ enum builtin {
 	BUILTIN_CD,
 	BUILTIN_EXIT,
 	BUILTIN_HISTORY,
-	BUILTIN_ECHO,
+//	BUILTIN_ECHO,
 	BUILTIN_EXPORT,
 	BUILTIN_UNEXPORT,
 	BUILTIN_NONE,
@@ -192,8 +202,8 @@ enum builtin detect_builtin(shell_cmd* in)
 		return BUILTIN_EXIT;
 	if (strcmp(in->argv[0], "history") == 0)
 		return BUILTIN_HISTORY;
-	if (strcmp(in->argv[0], "echo") == 0)
-		return BUILTIN_ECHO;
+//	if (strcmp(in->argv[0], "echo") == 0)
+//		return BUILTIN_ECHO;
 	if (strcmp(in->argv[0], "export") == 0)
 		return BUILTIN_EXPORT;
 	if (strcmp(in->argv[0], "unexport") == 0)
@@ -226,14 +236,14 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 		else
 			fprintf(stderr, "cd: %s: %s\n", cmd->argv[1], strerror(errno));
 		break;
-	case BUILTIN_ECHO:
-		for (int i = 1; i != cmd->argc; ++i) {
-			fputs(cmd->argv[i], stdout);
-			if (i != cmd->argc - 1)
-				putchar(' ');
-		}
-		putchar('\n');
-		break;
+//	case BUILTIN_ECHO:
+//		for (int i = 1; i != cmd->argc; ++i) {
+//			fputs(cmd->argv[i], stdout);
+//			if (i != cmd->argc - 1)
+//				putchar(' ');
+//		}
+//		putchar('\n');
+//		break;
 	case BUILTIN_HISTORY:
 		print_history();
 		break;
@@ -275,7 +285,8 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 	}
 }
 
-atomic_int sigint_var, sigquit_var, sigchld_var;
+atomic_int sigint_var, sigquit_var;
+//atomic_int sigchld_var;
 
 void sig_handler(int id)
 {
@@ -287,7 +298,8 @@ void sig_handler(int id)
 		sigint_var = 1;
 		break;
 	case SIGCHLD:
-		sigchld_var++;
+		while (waitpid(-1, NULL, WNOHANG) > 0);
+		//sigchld_var++;
 		break;
 	}
 }
