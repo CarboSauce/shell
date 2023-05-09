@@ -156,6 +156,7 @@ int parse_line(parser_result* res, const char* line)
 	vec_cmds cmds  = vec_cmds_init();
 	int isasync    = 0;
 	int redirstate = 0;
+	int attribs    = 0;
 	char* stdinf   = NULL;
 	char* stdoutf  = NULL;
 	for (;;) {
@@ -172,12 +173,13 @@ int parse_line(parser_result* res, const char* line)
 			break;
 		}
 		cmd_attributes redi = parse_symbol(&line);
+
 		if (redi != ATTRIBUTE_NONE && redi != ATTRIBUTE_STDIN
 			&& (redi & ATTRIBUTE_STDOUT) == 0) {
 			char* argv_needs_null = NULL;
 			vec_string_push(&out, &argv_needs_null);
 			shell_cmd tmp = (shell_cmd) {
-				.attrib = redi, .argc = out.size - 1, .argv = out.buf
+				.argc = out.size - 1, .argv = out.buf
 			};
 			vec_cmds_push(&cmds, &tmp);
 			out = vec_string_init();
@@ -205,6 +207,7 @@ int parse_line(parser_result* res, const char* line)
 			return 1;
 
 		} else if (redi == ATTRIBUTE_STDIN) {
+			attribs |= ATTRIBUTE_STDIN;
 			if (str.size == 0) {
 				fprintf(
 					stderr, "%s: Missing file to redirect stdin\n", progname);
@@ -230,6 +233,7 @@ int parse_line(parser_result* res, const char* line)
 				cleanup_vecs(&cmds, &out, &str);
 				return 1;
 			}
+			attribs |= redi;
 			stdoutf    = str.buf;
 			redirstate = 1;
 		} else if (str.size != 0)
@@ -247,7 +251,6 @@ int parse_line(parser_result* res, const char* line)
 	char* argv_needs_null = NULL;
 	vec_string_push(&out, &argv_needs_null);
 	shell_cmd tmp = (shell_cmd) {
-		.attrib = ATTRIBUTE_NONE,
 		.argc   = out.size - 1,
 		.argv   = out.buf,
 	};
@@ -257,6 +260,7 @@ int parse_line(parser_result* res, const char* line)
 	res->cmdlist.commands = cmds.buf;
 	res->stdinfile        = stdinf;
 	res->stdoutfile       = stdoutf;
+	res->attrib           = attribs;
 	return 0;
 }
 

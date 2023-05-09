@@ -13,7 +13,6 @@ typedef enum cmd_attributes {
 } cmd_attributes;
 
 typedef struct shell_cmd {
-	cmd_attributes attrib;
 	int argc;
 	char** argv;
 } shell_cmd;
@@ -27,6 +26,7 @@ typedef struct parser_result {
 	cmd_list cmdlist;
 	char* stdinfile;
 	char* stdoutfile;
+	cmd_attributes attrib;
 	int is_async;
 } parser_result;
 
