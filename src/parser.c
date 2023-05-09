@@ -29,16 +29,6 @@ enum symbol {
 	SYMBOL_NOMATCH
 };
 
-typedef struct redirect {
-	enum stop_reason reason;
-	enum cmd_attributes attr;
-} redirect;
-
-static void critical_err(const char* str)
-{
-	fprintf(stderr, "Critical error: %s\n", str);
-	exit(1);
-}
 static const char* skip_ws(const char* in)
 {
 	for (char c; (c = *in) != '\0'; ++in) {
@@ -78,8 +68,7 @@ static int push_word(string* str, const char** line)
 
 static cmd_attributes parse_symbol(const char** in)
 {
-	const char* tmp = *in;
-	enum stop_reason symbol;
+	const char* tmp           = *in;
 	enum cmd_attributes flags = ATTRIBUTE_NONE;
 	int moveahead             = 0;
 	switch (*tmp) {
@@ -166,9 +155,8 @@ int parse_line(parser_result* res, const char* line)
 			&& (redi & ATTRIBUTE_STDOUT) == 0) {
 			char* argv_needs_null = NULL;
 			vec_string_push(&out, &argv_needs_null);
-			shell_cmd tmp = (shell_cmd) {
-				.argc = out.size - 1, .argv = out.buf
-			};
+			shell_cmd tmp
+				= (shell_cmd) { .argc = out.size - 1, .argv = out.buf };
 			vec_cmds_push(&cmds, &tmp);
 			out = vec_string_init();
 		}
@@ -239,8 +227,8 @@ int parse_line(parser_result* res, const char* line)
 	char* argv_needs_null = NULL;
 	vec_string_push(&out, &argv_needs_null);
 	shell_cmd tmp = (shell_cmd) {
-		.argc   = out.size - 1,
-		.argv   = out.buf,
+		.argc = out.size - 1,
+		.argv = out.buf,
 	};
 	vec_cmds_push(&cmds, &tmp);
 	res->is_async         = isasync;
