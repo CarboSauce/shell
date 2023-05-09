@@ -2,11 +2,11 @@
 #include "vec.h"
 #include "vecstring.h"
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 VEC_DECLARE(vec_string, char*);
 
@@ -41,7 +41,7 @@ static void critical_err(const char* str)
 }
 static const char* skip_ws(const char* in)
 {
-	for (char c;(c = *in) != '\0';++in) {
+	for (char c; (c = *in) != '\0'; ++in) {
 		if (!isspace(c))
 			break;
 	}
@@ -49,7 +49,7 @@ static const char* skip_ws(const char* in)
 }
 static int push_word(string* str, const char** line)
 {
-	int state_dq = 0;
+	int state_dq    = 0;
 	int state_bcksl = 0;
 	const char* tmp = *line;
 	if (*tmp == '\0')
@@ -76,20 +76,18 @@ static int push_word(string* str, const char** line)
 	return END_OF_LINE;
 }
 
-
-
 static cmd_attributes parse_symbol(const char** in)
 {
 	const char* tmp = *in;
 	enum stop_reason symbol;
-	enum cmd_attributes flags = ATTRIBUTE_NONE; 
-	int moveahead = 0;
+	enum cmd_attributes flags = ATTRIBUTE_NONE;
+	int moveahead             = 0;
 	switch (*tmp) {
-	case '1': 
+	case '1':
 		if (*tmp == '>') {
 			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
 			moveahead++;
-			
+
 			if (tmp[2] == '>') {
 				moveahead++;
 				flags |= ATTRIBUTE_APPEND;
@@ -104,8 +102,8 @@ static cmd_attributes parse_symbol(const char** in)
 	case '2':
 		if (tmp[1] == '>') {
 			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
-			moveahead+=2;
-			
+			moveahead += 2;
+
 			if (tmp[2] == '>') {
 				moveahead++;
 				flags |= ATTRIBUTE_APPEND;
@@ -115,7 +113,7 @@ static cmd_attributes parse_symbol(const char** in)
 			};
 		} else {
 			flags = ATTRIBUTE_NONE;
-		} 
+		}
 		break;
 	case '>': {
 		flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
@@ -141,11 +139,12 @@ static cmd_attributes parse_symbol(const char** in)
 		flags |= ATTRIBUTE_NONE;
 		break;
 	}
-	*in = skip_ws(tmp+moveahead);
-	return flags; 
+	*in = skip_ws(tmp + moveahead);
+	return flags;
 }
 
-void cleanup_vecs(vec_cmds* in1, vec_string* in2, string* in3) {
+void cleanup_vecs(vec_cmds* in1, vec_string* in2, string* in3)
+{
 	string_deinit(in3);
 	vec_string_deinit(in2);
 	vec_cmds_deinit(in1);
@@ -154,15 +153,17 @@ void cleanup_vecs(vec_cmds* in1, vec_string* in2, string* in3) {
 int parse_line(parser_result* res, const char* line)
 {
 	vec_string out = vec_string_init();
-	vec_cmds cmds = vec_cmds_init();
-	int isasync = 0;
-	char* stdinf = NULL;
+	vec_cmds cmds  = vec_cmds_init();
+	int isasync    = 0;
+	int redirstate = 0;
+	char* stdinf   = NULL;
+	char* stdoutf  = NULL;
 	for (;;) {
 		line = skip_ws(line);
 		if (line[0] == '&') {
-			line = skip_ws(line+1);
+			line = skip_ws(line + 1);
 			if (line[0] != '\0') {
-				fprintf(stderr,"%s: Expected nothing after &\n",progname);
+				fprintf(stderr, "%s: Expected nothing after &\n", progname);
 				vec_string_deinit(&out);
 				vec_cmds_deinit(&cmds);
 				return 1;
@@ -171,48 +172,66 @@ int parse_line(parser_result* res, const char* line)
 			break;
 		}
 		cmd_attributes redi = parse_symbol(&line);
-		if (redi != ATTRIBUTE_NONE
-		 && redi != ATTRIBUTE_STDIN) {
-		 	char* argv_needs_null = NULL;
-		 	vec_string_push(&out,&argv_needs_null);
-		 	shell_cmd tmp = (shell_cmd) {
-		 		.attrib = redi,
-		 		.argc = out.size-1,
-		 		.argv = out.buf
-		 	};
-		 	vec_cmds_push(&cmds, &tmp);
-		 	out = vec_string_init();
+		if (redi != ATTRIBUTE_NONE && redi != ATTRIBUTE_STDIN
+			&& (redi & ATTRIBUTE_STDOUT) == 0) {
+			char* argv_needs_null = NULL;
+			vec_string_push(&out, &argv_needs_null);
+			shell_cmd tmp = (shell_cmd) {
+				.attrib = redi, .argc = out.size - 1, .argv = out.buf
+			};
+			vec_cmds_push(&cmds, &tmp);
+			out = vec_string_init();
 		}
-		
-		string str = string_init();
-		int res = push_word(&str, &line);
 
-		if (res == END_OF_LINE 
-		 && out.size == 0
-		 && cmds.size == 0
-		 && str.size == 0) {
+		string str = string_init();
+		int res    = push_word(&str, &line);
+
+		if (res == END_OF_LINE && out.size == 0 && cmds.size == 0
+			&& str.size == 0) {
 			cleanup_vecs(&cmds, &out, &str);
 			return 1;
 		}
+		if (redirstate == 1 && redi == ATTRIBUTE_NONE && res != END_OF_LINE) {
+			if (redi == ATTRIBUTE_PIPE) {
+				fprintf(stderr,
+					"%s: Unexpected pipe after stdout redirection\n",
+					progname);
+			} else {
+				fprintf(stderr,
+					"%s: Only symbols expected after stdout redirection\n",
+					progname);
+			}
+			cleanup_vecs(&cmds, &out, &str);
+			return 1;
 
-		if (redi == ATTRIBUTE_STDIN) {
+		} else if (redi == ATTRIBUTE_STDIN) {
 			if (str.size == 0) {
-				fprintf(stderr,"%s: Missing file to redirect stdin\n",progname);
+				fprintf(
+					stderr, "%s: Missing file to redirect stdin\n", progname);
 				cleanup_vecs(&cmds, &out, &str);
 				return 1;
 			}
 			stdinf = str.buf;
-			line = skip_ws(line);
+			line   = skip_ws(line);
 			if (line[0] == '&') {
-				line = skip_ws(line+1);
+				line = skip_ws(line + 1);
 				if (line[0] != '\0') {
-					fprintf(stderr,"%s: Expected nothing after &\n",progname);
+					fprintf(stderr, "%s: Expected nothing after &\n", progname);
 					cleanup_vecs(&cmds, &out, &str);
 					return 1;
 				}
 				isasync = 1;
-				res = END_OF_LINE;
+				res     = END_OF_LINE;
 			}
+		} else if ((redi & ATTRIBUTE_STDOUT) != 0) {
+			if (str.size == 0) {
+				fprintf(
+					stderr, "%s: Missing file to redirect stdin\n", progname);
+				cleanup_vecs(&cmds, &out, &str);
+				return 1;
+			}
+			stdoutf    = str.buf;
+			redirstate = 1;
 		} else if (str.size != 0)
 			vec_string_push(&out, &str.buf);
 
@@ -226,17 +245,18 @@ int parse_line(parser_result* res, const char* line)
 	}
 
 	char* argv_needs_null = NULL;
-	vec_string_push(&out,&argv_needs_null);
+	vec_string_push(&out, &argv_needs_null);
 	shell_cmd tmp = (shell_cmd) {
 		.attrib = ATTRIBUTE_NONE,
-		.argc = out.size-1,
-		.argv = out.buf
+		.argc   = out.size - 1,
+		.argv   = out.buf,
 	};
 	vec_cmds_push(&cmds, &tmp);
-	res->is_async = isasync;
-	res->cmdlist.size = cmds.size;
+	res->is_async         = isasync;
+	res->cmdlist.size     = cmds.size;
 	res->cmdlist.commands = cmds.buf;
-	res->stdinfile = stdinf;
+	res->stdinfile        = stdinf;
+	res->stdoutfile       = stdoutf;
 	return 0;
 }
 
@@ -250,4 +270,5 @@ void parser_result_dealloc(parser_result* in)
 	}
 	free(in->cmdlist.commands);
 	free(in->stdinfile);
+	free(in->stdoutfile);
 }

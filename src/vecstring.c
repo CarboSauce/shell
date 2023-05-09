@@ -11,14 +11,14 @@ string string_init()
 		exit(1);
 	}
 	out.size = 0;
-	out.cap = 16;
+	out.cap  = 16;
 	return out;
 }
 
 void string_deinit(string* str)
 {
 	free(str->buf);
-	str->cap = 0;
+	str->cap  = 0;
 	str->size = 0;
 }
 
@@ -26,8 +26,8 @@ void string_push(string* str, char c)
 {
 	if (str->size + 2 == str->cap) {
 		const size_t newcap = str->cap + str->cap / 2;
-		str->buf = realloc(str->buf, newcap);
+		str->buf            = realloc(str->buf, newcap);
 	}
 	str->buf[str->size++] = c;
-	str->buf[str->size] = '\0';
+	str->buf[str->size]   = '\0';
 }

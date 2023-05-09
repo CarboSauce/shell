@@ -55,12 +55,14 @@ void execute(cmd_list* command_list, process_list* p_list, int current)
 		dup2(p_list->processes[current].stdin_fd, STDIN_FILENO);
 	}
 	p_close(p_list);
-	if (execvp(command_list->commands[current].argv[0], command_list->commands[current].argv)
+	if (execvp(command_list->commands[current].argv[0],
+			command_list->commands[current].argv)
 		== -1) {
-		fprintf(stderr, "%s: %s: execvp failed: %s"
-				, progname
-				, command_list->commands[current].argv[0]
-				, strerror(errno));
+		fprintf(stderr,
+			"%s: %s: execvp failed: %s",
+			progname,
+			command_list->commands[current].argv[0],
+			strerror(errno));
 		exit(errno);
 	}
 }
@@ -82,12 +84,12 @@ bool pajpik(parser_result* in)
 {
 	process_list p_list;
 	p_list.pipes_len = in->cmdlist.size - 1;
-	p_list.pipes = calloc(sizeof(int[2]), p_list.pipes_len);
-
+	p_list.pipes     = calloc(sizeof(int[2]), p_list.pipes_len);
 	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
+
 	for (int i = 1; i < in->cmdlist.size; ++i) {
 		pipe(p_list.pipes[i - 1]);
-		p_list.processes[i].stdin_fd = p_list.pipes[i - 1][0];
+		p_list.processes[i].stdin_fd      = p_list.pipes[i - 1][0];
 		p_list.processes[i - 1].stdout_fd = p_list.pipes[i - 1][1];
 	}
 
@@ -113,8 +115,8 @@ int prompt_init(char** prompt)
 	if (login == NULL)
 		return -2;
 	const char* fmt = "%s@%s %%s\n";
-	int sz = snprintf(NULL, 0, fmt, login, hname);
-	char* buf = malloc(sz + 1);
+	int sz          = snprintf(NULL, 0, fmt, login, hname);
+	char* buf       = malloc(sz + 1);
 	if (buf == NULL)
 		return -3;
 	snprintf(buf, sz + 1, fmt, hname, login);
@@ -125,7 +127,12 @@ int prompt_init(char** prompt)
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) isasync(%d)\n", i, in->cmdlist.commands[i].attrib, in->stdinfile, in->is_async);
+		printf("Cmdlist(%d); Attribute(%d) stdinf(%s) stdoutf(%s) isasync(%d)\n",
+			i,
+			in->cmdlist.commands[i].attrib,
+			in->stdinfile,
+			in->stdoutfile,
+			in->is_async);
 		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
 			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
 		}
@@ -215,10 +222,10 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 				break;
 			}
 			overwrite = 1;
-			in = cmd->argv[2];
-			out = cmd->argv[3];
+			in        = cmd->argv[2];
+			out       = cmd->argv[3];
 		} else {
-			in = cmd->argv[1];
+			in  = cmd->argv[1];
 			out = cmd->argv[2];
 		}
 		if (setenv(in, out, overwrite) == -1) {
@@ -261,9 +268,11 @@ void sigint_handler(int id)
 {
 	rl_free_line_state();
 	rl_cleanup_after_signal();
-	RL_UNSETSTATE(RL_STATE_ISEARCH | RL_STATE_ISEARCH | RL_STATE_NSEARCH | RL_STATE_VIMOTION | RL_STATE_NUMERICARG | RL_STATE_MULTIKEY);
+	RL_UNSETSTATE(RL_STATE_ISEARCH | RL_STATE_ISEARCH | RL_STATE_NSEARCH
+				  | RL_STATE_VIMOTION | RL_STATE_NUMERICARG
+				  | RL_STATE_MULTIKEY);
 	rl_point = rl_end = rl_mark = 0;
-	rl_line_buffer[0] = 0;
+	rl_line_buffer[0]           = 0;
 	write(STDOUT_FILENO, "\n", 1);
 }
 
@@ -272,11 +281,11 @@ int signal_hook()
 	int reset = 0;
 	if (sigint_var) {
 		sigint_var = 0;
-		reset = 1;
+		reset      = 1;
 	}
 	if (sigquit_var) {
 		sigquit_var = 0;
-		reset = 1;
+		reset       = 1;
 		putchar('\n');
 		print_history();
 	}
