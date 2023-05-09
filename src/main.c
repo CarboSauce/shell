@@ -88,7 +88,17 @@ bool pajpik(parser_result* in)
 	
 	if(in->stdoutfile != NULL)
 	{
-		int fd = open(in->stdoutfile, O_CREAT|O_WRONLY , 0666);
+		int perms = O_WRONLY;
+		if((in->attrib & ATTRIBUTE_APPEND) != 0)
+			perms |= O_APPEND;
+		if((in->attrib & ATTRIBUTE_CREAT) != 0)
+			perms |= O_CREAT;
+		
+		if((in->attrib & ATTRIBUTE_TRUNC) != 0)
+			perms |= O_TRUNC;
+		
+		
+		int fd = open(in->stdoutfile, perms , 0666);
 		if(fd == -1){
 		perror(in->stdinfile);
 		free(p_list.pipes);
