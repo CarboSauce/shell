@@ -85,7 +85,7 @@ static cmd_attributes parse_symbol(const char** in)
 	switch (*tmp) {
 	case '1':
 		if (*tmp == '>') {
-			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
+			flags |= ATTRIBUTE_STDOUT;
 			moveahead++;
 
 			if (tmp[2] == '>') {
@@ -94,29 +94,31 @@ static cmd_attributes parse_symbol(const char** in)
 			} else if (tmp[2] == '|') {
 				moveahead++;
 				flags |= ATTRIBUTE_TRUNC;
+			} else {
+				flags |= ATTRIBUTE_EXCL;
 			}
 		} else {
 			flags = ATTRIBUTE_NONE;
 		}
 		break;
-	case '2':
-		if (tmp[1] == '>') {
-			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
-			moveahead += 2;
-
-			if (tmp[2] == '>') {
-				moveahead++;
-				flags |= ATTRIBUTE_APPEND;
-			} else if (tmp[2] == '|') {
-				moveahead++;
-				flags |= ATTRIBUTE_TRUNC;
-			};
-		} else {
-			flags = ATTRIBUTE_NONE;
-		}
-		break;
+//	case '2':
+//		if (tmp[1] == '>') {
+//			flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
+//			moveahead += 2;
+//
+//			if (tmp[2] == '>') {
+//				moveahead++;
+//				flags |= ATTRIBUTE_APPEND;
+//			} else if (tmp[2] == '|') {
+//				moveahead++;
+//				flags |= ATTRIBUTE_TRUNC;
+//			};
+//		} else {
+//			flags = ATTRIBUTE_NONE;
+//		}
+//		break;
 	case '>': {
-		flags |= ATTRIBUTE_STDOUT | ATTRIBUTE_CREAT;
+		flags |= ATTRIBUTE_STDOUT;
 		moveahead++;
 		if (tmp[1] == '>') {
 			moveahead++;
@@ -124,7 +126,9 @@ static cmd_attributes parse_symbol(const char** in)
 		} else if (tmp[1] == '|') {
 			moveahead++;
 			flags |= ATTRIBUTE_TRUNC;
-		};
+		} else {
+			flags |= ATTRIBUTE_EXCL;
+		}
 		break;
 	}
 	case '|':
