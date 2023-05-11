@@ -47,7 +47,7 @@ static int push_word(string* str, const char** line)
 		return END_OF_LINE;
 	for (char c; (c = *tmp) != '\0'; ++tmp) {
 		if (state_bcksl != 1) {
-			if (c == '\\') {
+			if (c == '\\' && state_dq == 0) {
 				state_bcksl = 1;
 				continue;
 			} else if (c == '"') {

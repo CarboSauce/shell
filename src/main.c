@@ -45,10 +45,10 @@ typedef struct process_list {
 void p_close(process_list* p_list)
 {
 	for (int i = 0; i < p_list->pipes_len; i++) {
-		if (p_list->processes->stdout_fd != STDOUT_FILENO)
-			close(p_list->processes->stdout_fd);
-		if (p_list->processes->stdin_fd != STDIN_FILENO)
-			close(p_list->processes->stdin_fd);
+		if (p_list->processes[i].stdout_fd != STDOUT_FILENO)
+			close(p_list->processes[i].stdout_fd);
+		if (p_list->processes[i].stdin_fd != STDIN_FILENO)
+			close(p_list->processes[i].stdin_fd);
 	}
 }
 
@@ -89,8 +89,8 @@ bool piping(parser_result* in)
 {
 
 	process_list p_list;
-	p_list.pipes_len = in->cmdlist.size
-					 - 1; // ilosc potrzebnych pipe'ow to ilosc calych komend -1
+	// ilosc potrzebnych pipe'ow to ilosc calych komend -1
+	p_list.pipes_len = in->cmdlist.size - 1;
 	p_list.pipes     = calloc(sizeof(int[2]), p_list.pipes_len);
 	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
 
@@ -135,6 +135,7 @@ bool piping(parser_result* in)
 	} else {
 		p_list.processes[0].stdin_fd = STDIN_FILENO;
 	}
+
 	for (int i = 1; i < in->cmdlist.size; ++i) {
 		pipe(p_list.pipes[i - 1]);
 		p_list.processes[i].stdin_fd      = p_list.pipes[i - 1][0];
@@ -152,9 +153,8 @@ bool piping(parser_result* in)
 		sigaddset(&blockchld, SIGCHLD);
 		sigprocmask(SIG_BLOCK, &blockchld, &oldmask);
 
-		for (int i = 0; i < p_list.pipes_len + 1; ++i) {
-			wait(NULL);
-		}
+		while (wait(NULL) > 0 || errno == EINTR)
+			;
 		sigprocmask(SIG_UNBLOCK, &blockchld, &oldmask);
 	}
 	free(p_list.pipes);
@@ -299,8 +299,9 @@ void sig_handler(int id)
 	}
 }
 
-void sigterm_handler(int fd) {
-	kill(0,SIGTERM);
+void sigterm_handler(int fd)
+{
+	kill(0, SIGTERM);
 	exit(1);
 }
 
@@ -332,22 +333,23 @@ void wait_for_all_child()
 	int res = waitpid(-1, NULL, WNOHANG);
 	if (res > -1) {
 		fprintf(stderr, "Waiting for child processes to finish\n");
-	} else if (errno != ECHILD){
+	} else if (errno != ECHILD) {
 		fprintf(stderr,
 			"%s: While waiting for child at exit: %s\n",
 			progname,
 			strerror(errno));
 		exit(1);
-	} else 
+	} else
 		return;
 
 	while (wait(NULL) > 0 || errno == EINTR)
 		;
 }
 
-void handle_noninteractive(const char* fname) {
-	prompt2     = NULL;
-	int fd      = open(fname, O_RDONLY);
+void handle_noninteractive(const char* fname)
+{
+	prompt2 = NULL;
+	int fd  = open(fname, O_RDONLY);
 	if (fd == -1) {
 		perror(progname);
 		exit(1);
@@ -360,7 +362,7 @@ void handle_noninteractive(const char* fname) {
 	rl_tty_set_echoing(0);
 }
 
-void handle_interactive() 
+void handle_interactive()
 {
 	// ustawienie katalogu roboczego i wczytanie promptu
 	set_cwd();
