@@ -18,28 +18,30 @@
 
 char curdir[PATH_MAX];
 const char* progname;
-char* prompt;
+char* prompt = NULL;
+int interactive;
+const char* prompt2 = "$ ";
 
 void logerr()
 {
 	perror(progname);
 	exit(1);
 }
-//struktura do przechowania informacji o procesach
+// struktura do przechowania informacji o procesach
 typedef struct process_ctx {
 	int stdin_fd;
 	int stdout_fd;
 	int status;
 } process_ctx;
 
-//lista procesow, przechowujowca pipe'y i informacje o procesach
+// lista procesow, przechowujowca pipe'y i informacje o procesach
 typedef struct process_list {
 	int pipes_len;
 	int (*pipes)[2];
 	process_ctx* processes;
 } process_list;
 
-//zamkniecie wszystkich pipe'ow
+// zamkniecie wszystkich pipe'ow
 void p_close(process_list* p_list)
 {
 	for (int i = 0; i < p_list->pipes_len; i++) {
@@ -50,7 +52,8 @@ void p_close(process_list* p_list)
 	}
 }
 
-//alokacja deskryptorow do wyjsc/wejsc aktualnego procesu oraz wywolanie jego programu?
+// alokacja deskryptorow do wyjsc/wejsc aktualnego procesu oraz wywolanie jego
+// programu?
 void execute(cmd_list* command_list, process_list* p_list, int current)
 {
 	dup2(p_list->processes[current].stdout_fd, STDOUT_FILENO);
@@ -68,7 +71,7 @@ void execute(cmd_list* command_list, process_list* p_list, int current)
 	}
 }
 
-//run - wywolanie funkcji execute w przypadku procesu dziecka
+// run - wywolanie funkcji execute w przypadku procesu dziecka
 pid_t run(cmd_list* commandlist, process_list p_list, int current)
 {
 	pid_t child_pid = fork();
@@ -86,25 +89,31 @@ bool piping(parser_result* in)
 {
 
 	process_list p_list;
-	p_list.pipes_len = in->cmdlist.size - 1; // ilosc potrzebnych pipe'ow to ilosc calych komend -1
+	p_list.pipes_len = in->cmdlist.size
+					 - 1; // ilosc potrzebnych pipe'ow to ilosc calych komend -1
 	p_list.pipes     = calloc(sizeof(int[2]), p_list.pipes_len);
 	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
-        
-        //jezeli wczytano nazwe pliku wyjsciowego
-	if (in->stdoutfile != NULL) { 
-		int perms = O_WRONLY | O_CREAT; //utworzenie zmiennej i przypisanie jej podstawowych atrybutow 
-		if ((in->attrib & ATTRIBUTE_APPEND) != 0) //kolejno dodanie atrybutow do zmienniej pomocniczej w zaleznosci od
-			perms |= O_APPEND;		  //wczytanych atrybutow
+
+	// jezeli wczytano nazwe pliku wyjsciowego
+	if (in->stdoutfile != NULL) {
+		int perms = O_WRONLY | O_CREAT; // utworzenie zmiennej i przypisanie jej
+										// podstawowych atrybutow
+		if ((in->attrib & ATTRIBUTE_APPEND)
+			!= 0) // kolejno dodanie atrybutow do zmienniej pomocniczej w
+				  // zaleznosci od
+			perms |= O_APPEND; // wczytanych atrybutow
 		if ((in->attrib & ATTRIBUTE_EXCL) != 0)
 			perms |= O_EXCL;
 
 		if ((in->attrib & ATTRIBUTE_TRUNC) != 0)
 			perms |= O_TRUNC;
-                //otwarcie pliku i przypisanie jego deskryptorow do zmiennej pomocniczej
+		// otwarcie pliku i przypisanie jego deskryptorow do zmiennej
+		// pomocniczej
 		int fd = open(in->stdoutfile, perms, 0666);
-		//W przypadku bledu otwarcia wypisanie bledu i zwolnienie zaalokowanej pamieci
-		if (fd == -1) {				   
-			perror(in->stdinfile);		   
+		// W przypadku bledu otwarcia wypisanie bledu i zwolnienie zaalokowanej
+		// pamieci
+		if (fd == -1) {
+			perror(in->stdinfile);
 			free(p_list.pipes);
 			free(p_list.processes);
 			return 1;
@@ -114,7 +123,7 @@ bool piping(parser_result* in)
 		p_list.processes[in->cmdlist.size - 1].stdout_fd = STDOUT_FILENO;
 	}
 
-	if (in->stdinfile != NULL) {//jezeli wczytano nazwe pliku wejsciowego
+	if (in->stdinfile != NULL) { // jezeli wczytano nazwe pliku wejsciowego
 		int fd = open(in->stdinfile, O_RDONLY, 0666);
 		if (fd == -1) {
 			perror(in->stdinfile);
@@ -152,10 +161,11 @@ bool piping(parser_result* in)
 	free(p_list.processes);
 	return 0;
 }
-//inicjalizacja promptu
+// inicjalizacja promptu
 int prompt_init(char** prompt)
 {
-	//utworzenie zmiennych do przechowania nazw hosta oraz loginu, nastepnie polaczenie ich w jedna
+	// utworzenie zmiennych do przechowania nazw hosta oraz loginu, nastepnie
+	// polaczenie ich w jedna
 	char hname[HOST_NAME_MAX + 1];
 	if (gethostname(hname, sizeof hname) == -1)
 		return -1;
@@ -172,23 +182,6 @@ int prompt_init(char** prompt)
 	return 0;
 }
 
-//funkcja sluzaca do wypisania zparsowanych wartosci, uzywana w celu potwierdzenia poprawnosci dzialania
-void print_cmdline(parser_result* in)
-{
-	for (int i = 0; i != in->cmdlist.size; ++i) {
-		printf(
-			"Cmdlist(%d); Attribute(%d) stdinf(%s) stdoutf(%s) isasync(%d)\n",
-			i,
-			in->attrib,
-			in->stdinfile,
-			in->stdoutfile,
-			in->is_async);
-		for (int j = 0; j != in->cmdlist.commands[i].argc; ++j) {
-			printf("\targ(%d): %s\n", j, in->cmdlist.commands[i].argv[j]);
-		}
-	}
-}
-
 enum builtin {
 	BUILTIN_CD,
 	BUILTIN_EXIT,
@@ -197,7 +190,7 @@ enum builtin {
 	BUILTIN_UNEXPORT,
 	BUILTIN_NONE,
 };
-//ustawienie aktualnego katalogu roboczego
+// ustawienie aktualnego katalogu roboczego
 void set_cwd()
 {
 	if (getcwd(curdir, sizeof curdir) == NULL) {
@@ -221,7 +214,7 @@ enum builtin detect_builtin(shell_cmd* in)
 	return BUILTIN_NONE;
 }
 
-//funkcja do wypisania historii komend
+// funkcja do wypisania historii komend
 void print_history()
 {
 	HIST_ENTRY** his = history_list();
@@ -233,7 +226,7 @@ void print_history()
 	}
 }
 
-//obsluga flag i bledow
+// obsluga flag i bledow
 void handle_builtin(const shell_cmd* cmd, enum builtin in)
 {
 	switch (in) {
@@ -259,7 +252,7 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 		const char *in, *out;
 		if (strcmp(cmd->argv[1], "-o") == 0) {
 			if (cmd->argc != 4) {
-				printf("export: Expected 2 arguments");
+				printf("export: Expected 2 arguments\n");
 				break;
 			}
 			overwrite = 1;
@@ -275,7 +268,7 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 	} break;
 	case BUILTIN_UNEXPORT:
 		if (cmd->argc != 2) {
-			printf("unexport: Expected 1 argument");
+			printf("unexport: Expected 1 argument\n");
 			break;
 		}
 		if (unsetenv(cmd->argv[1]) == -1) {
@@ -289,7 +282,7 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 }
 
 atomic_int sigint_var, sigquit_var;
-//ubsluga sygnalow
+// obsluga sygnalow
 void sig_handler(int id)
 {
 	switch (id) {
@@ -306,19 +299,9 @@ void sig_handler(int id)
 	}
 }
 
-void sigint_handler(int id)
-{
-	//zwolnienie kazdego ? stanu zwiazanego z aktualna linia wejscia i zresetowanie stanu terminala do z przed readline()
-	rl_free_line_state();
-	rl_cleanup_after_signal();
-	//odznaczenie flag
-	RL_UNSETSTATE(RL_STATE_ISEARCH | RL_STATE_ISEARCH | RL_STATE_NSEARCH
-				  | RL_STATE_VIMOTION | RL_STATE_NUMERICARG
-				  | RL_STATE_MULTIKEY);
-	//wyczyszczenie linii i ustawienie kursora na start i wypisanie standardowego wyjscia + przejscie do kolejnej linii
-	rl_point = rl_end = rl_mark = 0;
-	rl_line_buffer[0]           = 0;
-	write(STDOUT_FILENO, "\n", 1);
+void sigterm_handler(int fd) {
+	kill(0,SIGTERM);
+	exit(1);
 }
 
 int signal_hook()
@@ -344,37 +327,87 @@ int signal_hook()
 	return 0;
 }
 
-int main(int argc, char** argv)
+void wait_for_all_child()
 {
-	(void)argc;
-	progname = argv[0];
-	//ustawienie katalogu roboczego i wczytanie promptu
+	int res = waitpid(-1, NULL, WNOHANG);
+	if (res > -1) {
+		fprintf(stderr, "Waiting for child processes to finish\n");
+	} else if (errno != ECHILD){
+		fprintf(stderr,
+			"%s: While waiting for child at exit: %s\n",
+			progname,
+			strerror(errno));
+		exit(1);
+	} else 
+		return;
+
+	while (wait(NULL) > 0 || errno == EINTR)
+		;
+}
+
+void handle_noninteractive(const char* fname) {
+	prompt2     = NULL;
+	int fd      = open(fname, O_RDONLY);
+	if (fd == -1) {
+		perror(progname);
+		exit(1);
+	}
+	if (dup2(fd, STDIN_FILENO) == -1) {
+		perror(progname);
+		close(fd);
+		exit(1);
+	}
+	rl_tty_set_echoing(0);
+}
+
+void handle_interactive() 
+{
+	// ustawienie katalogu roboczego i wczytanie promptu
 	set_cwd();
 	if (prompt_init(&prompt) < 0) {
-		perror(argv[0]);
-		return 1;
+		perror(progname);
+		exit(1);
+	}
+	read_history(NULL);
+}
+
+int main(int argc, char** argv)
+{
+	progname = argv[0];
+	if (argc == 1) {
+		// w przypadku braku argumentow jest mozliwosc
+		// ze stdin to nie terminal a plik (przekierowanie)
+		if (isatty(STDIN_FILENO)) {
+			interactive = 1;
+			handle_interactive();
+		} else {
+			interactive = 0;
+		}
+	} else {
+		// w przypadku nieinteraktywnym przekierowujemy stdin na plik
+		interactive = 0;
+		handle_noninteractive(argv[1]);
 	}
 	signal(SIGINT, sig_handler);
 	signal(SIGQUIT, sig_handler);
 	signal(SIGCHLD, sig_handler);
 	rl_signal_event_hook = signal_hook;
 
-	read_history(NULL);
-	//utworzenie i ustawienie warunku running na tru, zmienia sie na false przy wpisaniu exit
+	// utworzenie i ustawienie warunku running na tru, zmienia sie na false przy
+	// wpisaniu exit
 	bool running = true;
 	while (running) {
-		printf(prompt, curdir);
-		char* buf = readline("$ ");
+		if (interactive)
+			printf(prompt, curdir);
+		char* buf = readline(prompt2);
 		if (buf == NULL) {
-			printf("readline returned null\n");
-			exit(1); // temporary
-			continue;
+			break;
 		}
 		parser_result pars;
-		//wczytanie linii, przetworzenie jej i odpowiednio obsluga bledow lub wykonanie polecenia
+		// wczytanie linii, przetworzenie jej i odpowiednio obsluga bledow lub
+		// wykonanie polecenia
 		int res = parse_line(&pars, buf);
 		if (res) {
-			puts("NO COMMAND");
 			goto rl_cleanup;
 		}
 		enum builtin tmp = detect_builtin(pars.cmdlist.commands);
@@ -384,15 +417,20 @@ int main(int argc, char** argv)
 			piping(&pars);
 		else
 			handle_builtin(pars.cmdlist.commands, tmp);
-		//wypisanie zadanego polecenia oraz zwolnienie pamieci bufora i przetworzonej linii
-		print_cmdline(&pars);
+
+		// wypisanie zadanego polecenia oraz zwolnienie pamieci bufora i
+		// przetworzonej linii
 		parser_result_dealloc(&pars);
-		add_history(buf);
+		if (interactive)
+			add_history(buf);
 	rl_cleanup:
 		free(buf);
 	}
 	// dealloc resources
-	write_history(NULL);
-	clear_history();
+	if (interactive) {
+		write_history(NULL);
+		clear_history();
+	}
 	free(prompt);
+	wait_for_all_child();
 }
