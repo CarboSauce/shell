@@ -78,24 +78,6 @@ static cmd_attributes parse_symbol(const char** in)
 	enum cmd_attributes flags = ATTRIBUTE_NONE;
 	int moveahead             = 0;
 	switch (*tmp) {
-	case '1':
-		if (*tmp == '>') {
-			flags |= ATTRIBUTE_STDOUT;
-			moveahead++;
-
-			if (tmp[2] == '>') {
-				moveahead++;
-				flags |= ATTRIBUTE_APPEND;
-			} else if (tmp[2] == '|') {
-				moveahead++;
-				flags |= ATTRIBUTE_TRUNC;
-			} else {
-				flags |= ATTRIBUTE_EXCL;
-			}
-		} else {
-			flags = ATTRIBUTE_NONE;
-		}
-		break;
 	case '>': {
 		flags |= ATTRIBUTE_STDOUT;
 		moveahead++;

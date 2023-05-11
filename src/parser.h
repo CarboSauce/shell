@@ -10,7 +10,7 @@ typedef enum cmd_attributes {
 	ATTRIBUTE_PIPE   = 8,
 	ATTRIBUTE_STDOUT = 16,
 	ATTRIBUTE_STDERR = 32,
-	ATTRIBUTE_STDIN  = 64
+	ATTRIBUTE_STDIN  = 32
 } cmd_attributes;
 
 // pojedyncza komenda

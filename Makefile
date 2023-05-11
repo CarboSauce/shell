@@ -20,9 +20,9 @@ DEPS := $(OBJS:.o=.d)
 .PHONY: clean run build
 
 run: build
-	$(BDIR)/shell.out
+	$(BDIR)/grynszpan.out
 
-build: $(BDIR)/shell.out ;
+build: $(BDIR)/grynszpan.out ;
 
 -include $(DEPS)
 
@@ -30,7 +30,7 @@ $(BDIR)/%.o: src/%.c
 	$(CC) -Wall -Wextra $(CFLAGS) -Isrc \
 		-MMD -c -o $@ $<
 
-$(BDIR)/shell.out: $(OBJS)
+$(BDIR)/grynszpan.out: $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS) -lreadline -lhistory 
 
 $(OBJS): | $(BDIR)
@@ -39,4 +39,4 @@ $(BDIR):
 	mkdir -p $(BDIR)
 
 clean:
-	rm -f $(OBJS) $(DEPS) $(BDIR)/shell.out
+	rm -f $(OBJS) $(DEPS) $(BDIR)/grynszpan.out

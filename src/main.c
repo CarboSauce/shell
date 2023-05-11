@@ -281,11 +281,14 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 	}
 }
 
-atomic_int sigint_var, sigquit_var;
+atomic_int sigint_var, sigquit_var, sigterm_var;
 // obsluga sygnalow
 void sig_handler(int id)
 {
 	switch (id) {
+	case SIGTERM:
+		sigterm_var = 1;
+		break;
 	case SIGQUIT:
 		sigquit_var = 1;
 		break;
@@ -299,18 +302,13 @@ void sig_handler(int id)
 	}
 }
 
-void sigterm_handler(int fd)
-{
-	kill(0, SIGTERM);
-	exit(1);
-}
-
 int signal_hook()
 {
 	int reset = 0;
 	if (sigint_var) {
 		sigint_var = 0;
 		reset      = 1;
+		printf("\x1b[7m^C\x1b[m");
 	}
 	if (sigquit_var) {
 		sigquit_var = 0;
@@ -318,8 +316,19 @@ int signal_hook()
 		putchar('\n');
 		print_history();
 	}
+	if (sigterm_var) {
+		write_history(NULL);
+		clear_history();
+		fprintf(stderr, "%s: Caught SIGTERM\n", progname);
+		if (kill(0, SIGTERM) == -1) {
+			fprintf(stderr,
+				"%s: Couldn't send SIGTERM to child processes\n",
+				progname);
+		}
+		exit(1);
+	}
 	if (reset) {
-		rl_cleanup_after_signal();
+		rl_free_line_state();
 		putchar('\n');
 		rl_on_new_line();
 		rl_replace_line("", 0);
@@ -349,17 +358,14 @@ void wait_for_all_child()
 void handle_noninteractive(const char* fname)
 {
 	prompt2 = NULL;
-	int fd  = open(fname, O_RDONLY);
-	if (fd == -1) {
-		perror(progname);
-		exit(1);
-	}
-	if (dup2(fd, STDIN_FILENO) == -1) {
-		perror(progname);
-		close(fd);
-		exit(1);
-	}
 	rl_tty_set_echoing(0);
+	FILE* f = fopen("/dev/null","w");
+	if (f != NULL)
+		rl_outstream = f;
+
+	if (fname == NULL)
+		return;
+	rl_instream = fopen(fname,"r");
 }
 
 void handle_interactive()
@@ -384,6 +390,7 @@ int main(int argc, char** argv)
 			handle_interactive();
 		} else {
 			interactive = 0;
+			handle_noninteractive(NULL);
 		}
 	} else {
 		// w przypadku nieinteraktywnym przekierowujemy stdin na plik
@@ -391,8 +398,12 @@ int main(int argc, char** argv)
 		handle_noninteractive(argv[1]);
 	}
 	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
 	signal(SIGQUIT, sig_handler);
 	signal(SIGCHLD, sig_handler);
+	stifle_history(20);
+	rl_clear_signals();
+	rl_catch_signals = 0;
 	rl_signal_event_hook = signal_hook;
 
 	// utworzenie i ustawienie warunku running na tru, zmienia sie na false przy
@@ -423,8 +434,9 @@ int main(int argc, char** argv)
 		// wypisanie zadanego polecenia oraz zwolnienie pamieci bufora i
 		// przetworzonej linii
 		parser_result_dealloc(&pars);
-		if (interactive)
+		if (interactive) {
 			add_history(buf);
+		}
 	rl_cleanup:
 		free(buf);
 	}
@@ -434,5 +446,9 @@ int main(int argc, char** argv)
 		clear_history();
 	}
 	free(prompt);
+	if (!interactive) {
+		fclose(rl_instream);
+		fclose(rl_outstream);
+	}
 	wait_for_all_child();
 }
