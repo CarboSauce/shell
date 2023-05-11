@@ -1,6 +1,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+//wartosci atrybutow do obslugi plikow
 typedef enum cmd_attributes {
 	ATTRIBUTE_NONE   = 0,
 	ATTRIBUTE_APPEND = 1,
@@ -12,16 +13,19 @@ typedef enum cmd_attributes {
 	ATTRIBUTE_STDIN  = 64
 } cmd_attributes;
 
+//pojedyncza komenda
 typedef struct shell_cmd {
 	int argc;
 	char** argv;
 } shell_cmd;
 
+//lista komend
 typedef struct cmd_list {
 	shell_cmd* commands;
 	int size;
 } cmd_list;
 
+//Przetworzona wczytana linia, podzielona na odpowiednio komendy i ich argumenty, pliki do wejscia oraz wyjscia + flaga async
 typedef struct parser_result {
 	cmd_list cmdlist;
 	char* stdinfile;

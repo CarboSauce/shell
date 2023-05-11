@@ -28,7 +28,7 @@ enum symbol {
 	SYMBOL_EOL,
 	SYMBOL_NOMATCH
 };
-
+//ominieci bialych znakow w linii
 static const char* skip_ws(const char* in)
 {
 	for (char c; (c = *in) != '\0'; ++in) {
@@ -37,6 +37,7 @@ static const char* skip_ws(const char* in)
 	}
 	return in;
 }
+
 static int push_word(string* str, const char** line)
 {
 	int state_dq    = 0;
@@ -65,7 +66,7 @@ static int push_word(string* str, const char** line)
 	*line = tmp;
 	return END_OF_LINE;
 }
-
+//ustawianie flag w zaleznosci od wczytanych symboli
 static cmd_attributes parse_symbol(const char** in)
 {
 	const char* tmp           = *in;
@@ -126,7 +127,7 @@ void cleanup_vecs(vec_cmds* in1, vec_string* in2, string* in3)
 	vec_string_deinit(in2);
 	vec_cmds_deinit(in1);
 }
-
+//glowna funkcja do przetworzenia linii
 int parse_line(parser_result* res, const char* line)
 {
 	vec_string out = vec_string_init();
@@ -239,7 +240,7 @@ int parse_line(parser_result* res, const char* line)
 	res->attrib           = attribs;
 	return 0;
 }
-
+//dealokacja pamieci wyniku parsowania
 void parser_result_dealloc(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {

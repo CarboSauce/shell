@@ -25,19 +25,21 @@ void logerr()
 	perror(progname);
 	exit(1);
 }
-
+//struktura do przechowania informacji o procesach
 typedef struct process_ctx {
 	int stdin_fd;
 	int stdout_fd;
 	int status;
 } process_ctx;
 
+//lista procesow, przechowujowca pipe'y i informacje o procesach
 typedef struct process_list {
 	int pipes_len;
 	int (*pipes)[2];
 	process_ctx* processes;
 } process_list;
 
+//zamkniecie wszystkich pipe'ow
 void p_close(process_list* p_list)
 {
 	for (int i = 0; i < p_list->pipes_len; i++) {
@@ -48,6 +50,7 @@ void p_close(process_list* p_list)
 	}
 }
 
+//alokacja deskryptorow do wyjsc/wejsc aktualnego procesu oraz wywolanie jego programu?
 void execute(cmd_list* command_list, process_list* p_list, int current)
 {
 	dup2(p_list->processes[current].stdout_fd, STDOUT_FILENO);
@@ -65,6 +68,7 @@ void execute(cmd_list* command_list, process_list* p_list, int current)
 	}
 }
 
+//run - wywolanie funkcji execute w przypadku procesu dziecka
 pid_t run(cmd_list* commandlist, process_list p_list, int current)
 {
 	pid_t child_pid = fork();
@@ -78,26 +82,29 @@ pid_t run(cmd_list* commandlist, process_list p_list, int current)
 	}
 }
 
-bool pajpik(parser_result* in)
+bool piping(parser_result* in)
 {
+
 	process_list p_list;
-	p_list.pipes_len = in->cmdlist.size - 1;
+	p_list.pipes_len = in->cmdlist.size - 1; // ilosc potrzebnych pipe'ow to ilosc calych komend -1
 	p_list.pipes     = calloc(sizeof(int[2]), p_list.pipes_len);
 	p_list.processes = malloc(sizeof(process_ctx) * in->cmdlist.size);
-
-	if (in->stdoutfile != NULL) {
-		int perms = O_WRONLY | O_CREAT;
-		if ((in->attrib & ATTRIBUTE_APPEND) != 0)
-			perms |= O_APPEND;
+        
+        //jezeli wczytano nazwe pliku wyjsciowego
+	if (in->stdoutfile != NULL) { 
+		int perms = O_WRONLY | O_CREAT; //utworzenie zmiennej i przypisanie jej podstawowych atrybutow 
+		if ((in->attrib & ATTRIBUTE_APPEND) != 0) //kolejno dodanie atrybutow do zmienniej pomocniczej w zaleznosci od
+			perms |= O_APPEND;		  //wczytanych atrybutow
 		if ((in->attrib & ATTRIBUTE_EXCL) != 0)
 			perms |= O_EXCL;
 
 		if ((in->attrib & ATTRIBUTE_TRUNC) != 0)
 			perms |= O_TRUNC;
-
+                //otwarcie pliku i przypisanie jego deskryptorow do zmiennej pomocniczej
 		int fd = open(in->stdoutfile, perms, 0666);
-		if (fd == -1) {
-			perror(in->stdinfile);
+		//W przypadku bledu otwarcia wypisanie bledu i zwolnienie zaalokowanej pamieci
+		if (fd == -1) {				   
+			perror(in->stdinfile);		   
 			free(p_list.pipes);
 			free(p_list.processes);
 			return 1;
@@ -107,7 +114,7 @@ bool pajpik(parser_result* in)
 		p_list.processes[in->cmdlist.size - 1].stdout_fd = STDOUT_FILENO;
 	}
 
-	if (in->stdinfile != NULL) {
+	if (in->stdinfile != NULL) {//jezeli wczytano nazwe pliku wejsciowego
 		int fd = open(in->stdinfile, O_RDONLY, 0666);
 		if (fd == -1) {
 			perror(in->stdinfile);
@@ -145,9 +152,10 @@ bool pajpik(parser_result* in)
 	free(p_list.processes);
 	return 0;
 }
-
+//inicjalizacja promptu
 int prompt_init(char** prompt)
 {
+	//utworzenie zmiennych do przechowania nazw hosta oraz loginu, nastepnie polaczenie ich w jedna
 	char hname[HOST_NAME_MAX + 1];
 	if (gethostname(hname, sizeof hname) == -1)
 		return -1;
@@ -164,6 +172,7 @@ int prompt_init(char** prompt)
 	return 0;
 }
 
+//funkcja sluzaca do wypisania zparsowanych wartosci, uzywana w celu potwierdzenia poprawnosci dzialania
 void print_cmdline(parser_result* in)
 {
 	for (int i = 0; i != in->cmdlist.size; ++i) {
@@ -188,7 +197,7 @@ enum builtin {
 	BUILTIN_UNEXPORT,
 	BUILTIN_NONE,
 };
-
+//ustawienie aktualnego katalogu roboczego
 void set_cwd()
 {
 	if (getcwd(curdir, sizeof curdir) == NULL) {
@@ -212,6 +221,7 @@ enum builtin detect_builtin(shell_cmd* in)
 	return BUILTIN_NONE;
 }
 
+//funkcja do wypisania historii komend
 void print_history()
 {
 	HIST_ENTRY** his = history_list();
@@ -223,6 +233,7 @@ void print_history()
 	}
 }
 
+//obsluga flag i bledow
 void handle_builtin(const shell_cmd* cmd, enum builtin in)
 {
 	switch (in) {
@@ -278,7 +289,7 @@ void handle_builtin(const shell_cmd* cmd, enum builtin in)
 }
 
 atomic_int sigint_var, sigquit_var;
-
+//ubsluga sygnalow
 void sig_handler(int id)
 {
 	switch (id) {
@@ -297,11 +308,14 @@ void sig_handler(int id)
 
 void sigint_handler(int id)
 {
+	//zwolnienie kazdego ? stanu zwiazanego z aktualna linia wejscia i zresetowanie stanu terminala do z przed readline()
 	rl_free_line_state();
 	rl_cleanup_after_signal();
+	//odznaczenie flag
 	RL_UNSETSTATE(RL_STATE_ISEARCH | RL_STATE_ISEARCH | RL_STATE_NSEARCH
 				  | RL_STATE_VIMOTION | RL_STATE_NUMERICARG
 				  | RL_STATE_MULTIKEY);
+	//wyczyszczenie linii i ustawienie kursora na start i wypisanie standardowego wyjscia + przejscie do kolejnej linii
 	rl_point = rl_end = rl_mark = 0;
 	rl_line_buffer[0]           = 0;
 	write(STDOUT_FILENO, "\n", 1);
@@ -334,9 +348,8 @@ int main(int argc, char** argv)
 {
 	(void)argc;
 	progname = argv[0];
-
+	//ustawienie katalogu roboczego i wczytanie promptu
 	set_cwd();
-
 	if (prompt_init(&prompt) < 0) {
 		perror(argv[0]);
 		return 1;
@@ -347,7 +360,7 @@ int main(int argc, char** argv)
 	rl_signal_event_hook = signal_hook;
 
 	read_history(NULL);
-
+	//utworzenie i ustawienie warunku running na tru, zmienia sie na false przy wpisaniu exit
 	bool running = true;
 	while (running) {
 		printf(prompt, curdir);
@@ -358,6 +371,7 @@ int main(int argc, char** argv)
 			continue;
 		}
 		parser_result pars;
+		//wczytanie linii, przetworzenie jej i odpowiednio obsluga bledow lub wykonanie polecenia
 		int res = parse_line(&pars, buf);
 		if (res) {
 			puts("NO COMMAND");
@@ -367,10 +381,10 @@ int main(int argc, char** argv)
 		if (tmp == BUILTIN_EXIT)
 			running = false;
 		else if (tmp == BUILTIN_NONE)
-			pajpik(&pars);
+			piping(&pars);
 		else
 			handle_builtin(pars.cmdlist.commands, tmp);
-
+		//wypisanie zadanego polecenia oraz zwolnienie pamieci bufora i przetworzonej linii
 		print_cmdline(&pars);
 		parser_result_dealloc(&pars);
 		add_history(buf);
